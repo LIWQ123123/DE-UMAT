@@ -1,0 +1,96 @@
+C First user subroutine trial
+      SUBROUTINE UMAT(STRESS,STATEV,DDSDDE,SSE,SPD,SCD,
+     1 RPL,DDSDDT,DRPLDE,DRPLDT,
+     2 STRAN,DSTRAN,TIME,DTIME,TEMP,DTEMP,PREDEF,DPRED,CMNAME,
+     3 NDI,NSHR,NTENS,NSTATV,PROPS,NPROPS,COORDS,DROT,PNEWDT,
+     4 CELENT,DFGRD0,DFGRD1,NOEL,NPT,LAYER,KSPT,JSTEP,KINC)
+C
+      INCLUDE 'ABA_PARAM.INC'
+C
+      CHARACTER*80 CMNAME
+      DIMENSION STRESS(NTENS),STATEV(NSTATV),
+     1 DDSDDE(NTENS,NTENS),
+     2 DDSDDT(NTENS),DRPLDE(NTENS),
+     3 STRAN(NTENS),DSTRAN(NTENS),TIME(2),PREDEF(1),DPRED(1),
+     4 PROPS(NPROPS),COORDS(3),DROT(3,3),DFGRD0(3,3),DFGRD1(3,3),
+     5 JSTEP(4),DFGRDP(3),BBAR(4),DISTGR(3,3),TEMP(1),DTEMP(1)
+      DIMENSION DSTRES(6),D(3,3)
+      INTEGER I,J
+      PARAMETER (ONE=1.0D0,TWO=2.0D0,THREE=3.0D0,SIX=6.0D0, HALF =0.5d0)
+      
+      !debug
+      !logical :: firstrun = .true.
+      !integer tempvar
+      !if(firstrun) then
+      !    write(*,*)"please input an integer:"
+      !    read(*,*)tempvar
+      !    firstrun = .false.
+      !endif
+      !tempvar =1234 !
+
+
+C     --------------------------------------------------
+C     PROPS(1) - C10
+C     PROPS(2) - THICKNESS
+C     PROPS(3) - EPSILON
+C     PROPS(4) - DFGRDP(1,1)
+C     PROPS(5) - DFGRDP(2,2)
+C     --------------------------------------------------
+      C10 = PROPS(1)
+      THICKNESS = PROPS(2)
+      EPSILON = PROPS(3)
+C
+      CTIME = time(2) + DTIME
+      IF (CTIME<=1) then
+      DFGRDP(1) = exp(log(PROPS(4))*CTIME)
+      DFGRDP(2) = exp(log(PROPS(5))*CTIME)
+      ELSE
+      DFGRDP(1) = PROPS(4)
+      DFGRDP(2) = PROPS(5)
+      ENDIF
+      
+C     DET = 1
+      DFGRDP(3) = 1/(DFGRDP(1)*DFGRDP(2))
+C
+C     Updata the  deformation gradient tensor
+C
+      DO I=1,3
+      DO J=1,3
+      DISTGR(I,J) = DFGRD1(I,J) * DFGRDP(J) 
+      ENDDO
+      ENDDO
+C
+C     Calculate left cauchy-green tensor
+C
+      BR(1) = DISTGR(1,1)**2 + DISTGR(1,2)**2 + DISTGR(1,3)**2
+      BR(2) = DISTGR(2,1)**2 + DISTGR(2,2)**2 + DISTGR(2,3)**2
+      BR(3) = DISTGR(3,1)**2 + DISTGR(3,2)**2 + DISTGR(3,3)**2
+      BR(4) = DISTGR(1,1)*DISTGR(2,1)+DISTGR(1,2)*DISTGR(2,2)
+     1    +DISTGR(1,3)*DISTGR(2,3)
+C
+C     Calculate the stress
+C
+
+      CTEMP = TEMP(1) + DTEMP(1)
+      ET = EPSILON * (CTEMP/THICKNESS) ** 2
+      STRESS_MAX2 = - ET / BBAR(3)
+      STATEV(2) = CTEMP/THICKNESS
+      TRBBAR = (BBAR(1) + BBAR(2) + BBAR(3))/ THREE
+      EG= TWO * C10
+      
+      STRESS(1) = EG * (BR(1) - BR(3)) + STRESS_E
+      STRESS(2) = EG * (BR(2) - BR(3)) + STRESS_E
+      STRESS(3) = EG * BR(4)
+      
+      DDSDDE(1,1) = EG * TWO * (BBAR(1)+BBAR(3)) + 2 * STRESS_E
+      DDSDDE(2,2) = EG * TWO * (BBAR(2)+BBAR(3)) + 2 * STRESS_E
+      DDSDDE(3,3) = EG * (BR(1) + BR(2)) / TWO
+      DDSDDE(1,2) = EG * TWO * (BR(3))+ 2 * STRESS_E
+      DDSDDE(1,3) = EG*BR(4)
+      DDSDDE(2,3) = EG*BR(4)
+      DDSDDE(2,1) = DDSDDE(1,2)
+      DDSDDE(3,1) = DDSDDE(1,3)
+      DDSDDE(3,2) = DDSDDE(2,3)
+      
+      RETURN
+      END
